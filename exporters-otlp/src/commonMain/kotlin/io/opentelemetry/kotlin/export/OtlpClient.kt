@@ -13,7 +13,10 @@ import io.ktor.http.URLBuilder
 import io.ktor.http.contentType
 import io.ktor.http.encodedPath
 import io.ktor.http.fromHttpToGmtDate
+import io.ktor.util.AttributeKey
 import io.ktor.utils.io.readRemaining
+import io.opentelemetry.kotlin.context.TempContextStandInApi
+import io.opentelemetry.kotlin.context.internalSuppressInstrumentation
 import io.opentelemetry.kotlin.error.SdkErrorHandler
 import io.opentelemetry.kotlin.error.guardOrDefaultSuspend
 import io.opentelemetry.kotlin.error.reportUserCodeError
@@ -34,6 +37,7 @@ import io.opentelemetry.kotlin.tracing.export.toProtobufByteArray
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.readByteArray
 
+@OptIn(TempContextStandInApi::class)
 internal class OtlpClient(
     val baseUrl: String,
     private val httpClient: HttpClient,
@@ -88,14 +92,20 @@ internal class OtlpClient(
             )
             emptyMap()
         }
-        val response = httpClient.post(url) {
-            if (supportsHttpCompression) {
-                compress("gzip")
+        val suppressScope = internalSuppressInstrumentation()
+        val response = try {
+            httpClient.post(url) {
+                attributes.put(SUPPRESS_INSTRUMENTATION_ATTRIBUTE, true)
+                if (supportsHttpCompression) {
+                    compress("gzip")
+                }
+                contentType(contentType)
+                header(HttpHeaders.UserAgent, userAgent)
+                requestHeaders.forEach { (name, value) -> header(name, value) }
+                setBody(requestSerializer())
             }
-            contentType(contentType)
-            header(HttpHeaders.UserAgent, userAgent)
-            requestHeaders.forEach { (name, value) -> header(name, value) }
-            setBody(requestSerializer())
+        } finally {
+            suppressScope.detach()
         }
         classifyResponse(response, parsePartialSuccess)
     }
@@ -159,5 +169,7 @@ internal class OtlpClient(
 
     private companion object {
         const val MAX_RESPONSE_BODY_BYTES: Long = 4 * 1024 * 1024
+        val SUPPRESS_INSTRUMENTATION_ATTRIBUTE: AttributeKey<Boolean> =
+            AttributeKey("suppress instrumentation")
     }
 }
