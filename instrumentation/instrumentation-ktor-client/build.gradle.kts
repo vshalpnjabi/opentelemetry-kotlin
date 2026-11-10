@@ -11,12 +11,14 @@ kotlin {
         commonMain {
             dependencies {
                 api(project(":api"))
+                implementation(project(":sdk-common"))
                 api(libs.ktor.client.core)
             }
         }
         commonTest {
             dependencies {
                 implementation(project(":implementation"))
+                implementation(project(":exporters-otlp"))
                 implementation(project(":test-fakes"))
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.ktor.client.mock)

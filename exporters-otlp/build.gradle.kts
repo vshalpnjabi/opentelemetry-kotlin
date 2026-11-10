@@ -32,6 +32,8 @@ kotlin {
         }
         commonTest {
             dependencies {
+                implementation(project(":implementation"))
+                implementation(project(":instrumentation:instrumentation-ktor-client"))
                 implementation(project(":test-fakes"))
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.ktor.client.mock)
